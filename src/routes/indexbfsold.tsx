@@ -23,10 +23,6 @@ export default function Home() {
   >("all");
   const [shouldStop, setShouldStop] = createSignal(false);
 
-  // --- STRATEGY SETTINGS ---
-  const [useWeak, setUseWeak] = createSignal(true);
-  const [useVeryWeak, setUseVeryWeak] = createSignal(true);
-
   // --- TIMER SIGNALS ---
   const [startTime, setStartTime] = createSignal<number | null>(null);
   const [currentTime, setCurrentTime] = createSignal<number | null>(null);
@@ -346,7 +342,7 @@ export default function Home() {
     const current_rows = [...row_indices];
     const current_cols = [...col_indices];
 
-    // 1. Strict Domination (Compulsory)
+    // 1. Strict Domination
     const s_rows = get_strictly_dominated(
       matrix,
       current_rows,
@@ -389,92 +385,88 @@ export default function Home() {
       return;
     }
 
-    // 2. Weak Domination (If Enabled)
-    if (useWeak()) {
-      const w_rows = get_weakly_dominated_options(
-        matrix,
-        current_rows,
-        current_cols,
-        true,
-      );
-      const w_cols = get_weakly_dominated_options(
-        matrix,
-        current_rows,
-        current_cols,
-        false,
-      );
+    // 2. Weak Domination
+    const w_rows = get_weakly_dominated_options(
+      matrix,
+      current_rows,
+      current_cols,
+      true,
+    );
+    const w_cols = get_weakly_dominated_options(
+      matrix,
+      current_rows,
+      current_cols,
+      false,
+    );
 
-      if (w_rows.length > 0 || w_cols.length > 0) {
-        for (const [strat, dominator] of w_rows) {
-          const next_rows = current_rows.filter((r) => r !== strat);
-          const newPath = `${path} -> R${strat} Weakly Dom by R${dominator}`;
-          stepsRecord.push({
-            path: newPath,
-            matrixSnapshot: matrix,
-            currentRowIndices: next_rows,
-            currentColIndices: current_cols,
-            logs: [],
-          });
-          queue.push({ matrix, r: next_rows, c: current_cols, p: newPath });
-        }
-        for (const [strat, dominator] of w_cols) {
-          const next_cols = current_cols.filter((c) => c !== strat);
-          const newPath = `${path} -> C${strat} Weakly Dom by C${dominator}`;
-          stepsRecord.push({
-            path: newPath,
-            matrixSnapshot: matrix,
-            currentRowIndices: current_rows,
-            currentColIndices: next_cols,
-            logs: [],
-          });
-          queue.push({ matrix, r: current_rows, c: next_cols, p: newPath });
-        }
-        return;
+    if (w_rows.length > 0 || w_cols.length > 0) {
+      for (const [strat, dominator] of w_rows) {
+        const next_rows = current_rows.filter((r) => r !== strat);
+        const newPath = `${path} -> R${strat} Weakly Dom by R${dominator}`;
+        stepsRecord.push({
+          path: newPath,
+          matrixSnapshot: matrix,
+          currentRowIndices: next_rows,
+          currentColIndices: current_cols,
+          logs: [],
+        });
+        queue.push({ matrix, r: next_rows, c: current_cols, p: newPath });
       }
+      for (const [strat, dominator] of w_cols) {
+        const next_cols = current_cols.filter((c) => c !== strat);
+        const newPath = `${path} -> C${strat} Weakly Dom by C${dominator}`;
+        stepsRecord.push({
+          path: newPath,
+          matrixSnapshot: matrix,
+          currentRowIndices: current_rows,
+          currentColIndices: next_cols,
+          logs: [],
+        });
+        queue.push({ matrix, r: current_rows, c: next_cols, p: newPath });
+      }
+      return;
     }
 
-    // 3. Very Weak Domination (If Enabled)
-    if (useVeryWeak()) {
-      const vw_rows = get_very_weakly_dominated_options(
-        matrix,
-        current_rows,
-        current_cols,
-        true,
-      );
-      const vw_cols = get_very_weakly_dominated_options(
-        matrix,
-        current_rows,
-        current_cols,
-        false,
-      );
+    // 3. Very Weak Domination
+    const vw_rows = get_very_weakly_dominated_options(
+      matrix,
+      current_rows,
+      current_cols,
+      true,
+    );
+    const vw_cols = get_very_weakly_dominated_options(
+      matrix,
+      current_rows,
+      current_cols,
+      false,
+    );
 
-      if (vw_rows.length > 0 || vw_cols.length > 0) {
-        for (const [strat, dominator] of vw_rows) {
-          const next_rows = current_rows.filter((r) => r !== strat);
-          const newPath = `${path} -> R${strat} Very Weakly Dom by R${dominator}`;
-          stepsRecord.push({
-            path: newPath,
-            matrixSnapshot: matrix,
-            currentRowIndices: next_rows,
-            currentColIndices: current_cols,
-            logs: [],
-          });
-          queue.push({ matrix, r: next_rows, c: current_cols, p: newPath });
-        }
-        for (const [strat, dominator] of vw_cols) {
-          const next_cols = current_cols.filter((c) => c !== strat);
-          const newPath = `${path} -> C${strat} Very Weakly Dom by C${dominator}`;
-          stepsRecord.push({
-            path: newPath,
-            matrixSnapshot: matrix,
-            currentRowIndices: current_rows,
-            currentColIndices: next_cols,
-            logs: [],
-          });
-          queue.push({ matrix, r: current_rows, c: next_cols, p: newPath });
-        }
-        return;
+    if (vw_rows.length > 0 || vw_cols.length > 0) {
+      for (const [strat, dominator] of vw_rows) {
+        const next_rows = current_rows.filter((r) => r !== strat);
+        const newPath = `${path} -> R${strat} Very Weakly Dom by R${dominator}`;
+        stepsRecord.push({
+          path: newPath,
+          matrixSnapshot: matrix,
+          currentRowIndices: next_rows,
+          currentColIndices: current_cols,
+          logs: [],
+        });
+        queue.push({ matrix, r: next_rows, c: current_cols, p: newPath });
       }
+      for (const [strat, dominator] of vw_cols) {
+        const next_cols = current_cols.filter((c) => c !== strat);
+        const newPath = `${path} -> C${strat} Very Weakly Dom by C${dominator}`;
+        stepsRecord.push({
+          path: newPath,
+          matrixSnapshot: matrix,
+          currentRowIndices: current_rows,
+          currentColIndices: next_cols,
+          logs: [],
+        });
+        queue.push({ matrix, r: current_rows, c: next_cols, p: newPath });
+      }
+      return;
     }
 
     // Termination
@@ -564,55 +556,6 @@ export default function Home() {
           <h1 class="text-2xl font-bold text-zinc-800 dark:text-zinc-100">
             IEDS Program - Breadth-First Search (BFS)
           </h1>
-
-          <div class="flex flex-col gap-4 p-4 rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-black dark:text-white">
-            <h3 class="text-xs font-bold uppercase tracking-wider">
-              Elimination Strategies
-            </h3>
-            <div class="flex flex-wrap gap-6">
-              <label class="flex items-center gap-2 text-sm cursor-not-allowed opacity-70">
-                <input
-                  type="checkbox"
-                  checked
-                  disabled
-                  class="accent-blue-600"
-                />
-                <span>
-                  Strict Domination{" "}
-                  <span class="text-[10px] bg-zinc-200 dark:bg-zinc-800 px-1 rounded">
-                    Required
-                  </span>
-                </span>
-              </label>
-              <label class="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={useWeak()}
-                  onInput={(e) => {
-                    const val = e.currentTarget.checked;
-                    setUseWeak(val);
-                    if (!val) setUseVeryWeak(false);
-                  }}
-                  class="accent-blue-600"
-                />
-                <span>Weak Domination</span>
-              </label>
-              <label class="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={useVeryWeak()}
-                  onInput={(e) => {
-                    const val = e.currentTarget.checked;
-                    setUseVeryWeak(val);
-                    if (val) setUseWeak(true);
-                  }}
-                  class="accent-blue-600"
-                />
-                <span>Very Weak Domination</span>
-              </label>
-            </div>
-          </div>
-
           <div class="flex flex-wrap items-center gap-4">
             <Show when={!fileName()}>
               <input

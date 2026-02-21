@@ -23,11 +23,6 @@ export default function Home() {
   >("all");
   const [shouldStop, setShouldStop] = createSignal(false);
 
-  // --- STRATEGY SETTINGS ---
-  const [useWeak, setUseWeak] = createSignal(true);
-  const [useVeryWeak, setUseVeryWeak] = createSignal(true);
-
-  // --- TIMER SIGNALS ---
   const [startTime, setStartTime] = createSignal<number | null>(null);
   const [currentTime, setCurrentTime] = createSignal<number | null>(null);
   const [firstEquilibriumTime, setFirstEquilibriumTime] = createSignal<
@@ -41,7 +36,6 @@ export default function Home() {
   let stepsRecord: GameStep[] = [];
   let fileInputRef: HTMLInputElement | undefined;
 
-  // --- TIMER FORMATTERS ---
   const formatTime = (ms: number) => {
     const mins = Math.floor(ms / 60000);
     const secs = Math.floor((ms % 60000) / 1000);
@@ -194,7 +188,7 @@ export default function Home() {
     cols: number[],
     path: string,
   ) => {
-    const queue: { matrix: Matrix; r: number[]; c: number[]; p: string }[] = [
+    const stack: { matrix: Matrix; r: number[]; c: number[]; p: string }[] = [
       { matrix, r: rows, c: cols, p: path },
     ];
     const batchSize = 25;
@@ -206,7 +200,7 @@ export default function Home() {
         return;
       }
 
-      if (queue.length === 0) {
+      if (stack.length === 0) {
         setWorkflow([...stepsRecord]);
         setIsLoading(false);
         stopTimer();
@@ -214,9 +208,9 @@ export default function Home() {
         return;
       }
 
-      for (let i = 0; i < batchSize && queue.length > 0; i++) {
-        const current = queue.shift()!;
-        solve_game_step(current.matrix, current.r, current.c, current.p, queue);
+      for (let i = 0; i < batchSize && stack.length > 0; i++) {
+        const current = stack.pop()!;
+        solve_game_step(current.matrix, current.r, current.c, current.p, stack);
         setProcessedCount((prev) => prev + 1);
       }
 
@@ -312,6 +306,7 @@ export default function Home() {
       for (const r_a of row_indices) {
         for (const r_b of row_indices) {
           if (r_a === r_b) continue;
+          // Strategy A is very weakly dominated by B if B is >= A in all cases
           if (
             col_indices.every((c) => matrix[r_b][c][0] >= matrix[r_a][c][0])
           ) {
@@ -341,12 +336,12 @@ export default function Home() {
     row_indices: number[],
     col_indices: number[],
     path: string,
-    queue: any[],
+    stack: any[],
   ) => {
     const current_rows = [...row_indices];
     const current_cols = [...col_indices];
 
-    // 1. Strict Domination (Compulsory)
+    // 1. Check Strict Domination
     const s_rows = get_strictly_dominated(
       matrix,
       current_rows,
@@ -364,7 +359,7 @@ export default function Home() {
         currentColIndices: current_cols,
         logs: [],
       });
-      queue.push({ matrix, r: next_rows, c: current_cols, p: newPath });
+      stack.push({ matrix, r: next_rows, c: current_cols, p: newPath });
       return;
     }
 
@@ -385,99 +380,95 @@ export default function Home() {
         currentColIndices: next_cols,
         logs: [],
       });
-      queue.push({ matrix, r: current_rows, c: next_cols, p: newPath });
+      stack.push({ matrix, r: current_rows, c: next_cols, p: newPath });
       return;
     }
 
-    // 2. Weak Domination (If Enabled)
-    if (useWeak()) {
-      const w_rows = get_weakly_dominated_options(
-        matrix,
-        current_rows,
-        current_cols,
-        true,
-      );
-      const w_cols = get_weakly_dominated_options(
-        matrix,
-        current_rows,
-        current_cols,
-        false,
-      );
+    // 2. Check Weak Domination
+    const w_rows = get_weakly_dominated_options(
+      matrix,
+      current_rows,
+      current_cols,
+      true,
+    );
+    const w_cols = get_weakly_dominated_options(
+      matrix,
+      current_rows,
+      current_cols,
+      false,
+    );
 
-      if (w_rows.length > 0 || w_cols.length > 0) {
-        for (const [strat, dominator] of w_rows) {
-          const next_rows = current_rows.filter((r) => r !== strat);
-          const newPath = `${path} -> R${strat} Weakly Dom by R${dominator}`;
-          stepsRecord.push({
-            path: newPath,
-            matrixSnapshot: matrix,
-            currentRowIndices: next_rows,
-            currentColIndices: current_cols,
-            logs: [],
-          });
-          queue.push({ matrix, r: next_rows, c: current_cols, p: newPath });
-        }
-        for (const [strat, dominator] of w_cols) {
-          const next_cols = current_cols.filter((c) => c !== strat);
-          const newPath = `${path} -> C${strat} Weakly Dom by C${dominator}`;
-          stepsRecord.push({
-            path: newPath,
-            matrixSnapshot: matrix,
-            currentRowIndices: current_rows,
-            currentColIndices: next_cols,
-            logs: [],
-          });
-          queue.push({ matrix, r: current_rows, c: next_cols, p: newPath });
-        }
-        return;
+    if (w_rows.length > 0 || w_cols.length > 0) {
+      for (const [strat, dominator] of w_rows) {
+        const next_rows = current_rows.filter((r) => r !== strat);
+        const newPath = `${path} -> R${strat} Weakly Dom by R${dominator}`;
+        stepsRecord.push({
+          path: newPath,
+          matrixSnapshot: matrix,
+          currentRowIndices: next_rows,
+          currentColIndices: current_cols,
+          logs: [],
+        });
+        stack.push({ matrix, r: next_rows, c: current_cols, p: newPath });
       }
+      for (const [strat, dominator] of w_cols) {
+        const next_cols = current_cols.filter((c) => c !== strat);
+        const newPath = `${path} -> C${strat} Weakly Dom by C${dominator}`;
+        stepsRecord.push({
+          path: newPath,
+          matrixSnapshot: matrix,
+          currentRowIndices: current_rows,
+          currentColIndices: next_cols,
+          logs: [],
+        });
+        stack.push({ matrix, r: current_rows, c: next_cols, p: newPath });
+      }
+      return;
     }
 
-    // 3. Very Weak Domination (If Enabled)
-    if (useVeryWeak()) {
-      const vw_rows = get_very_weakly_dominated_options(
-        matrix,
-        current_rows,
-        current_cols,
-        true,
-      );
-      const vw_cols = get_very_weakly_dominated_options(
-        matrix,
-        current_rows,
-        current_cols,
-        false,
-      );
+    // 3. Check Very Weak Domination
+    const vw_rows = get_very_weakly_dominated_options(
+      matrix,
+      current_rows,
+      current_cols,
+      true,
+    );
+    const vw_cols = get_very_weakly_dominated_options(
+      matrix,
+      current_rows,
+      current_cols,
+      false,
+    );
 
-      if (vw_rows.length > 0 || vw_cols.length > 0) {
-        for (const [strat, dominator] of vw_rows) {
-          const next_rows = current_rows.filter((r) => r !== strat);
-          const newPath = `${path} -> R${strat} Very Weakly Dom by R${dominator}`;
-          stepsRecord.push({
-            path: newPath,
-            matrixSnapshot: matrix,
-            currentRowIndices: next_rows,
-            currentColIndices: current_cols,
-            logs: [],
-          });
-          queue.push({ matrix, r: next_rows, c: current_cols, p: newPath });
-        }
-        for (const [strat, dominator] of vw_cols) {
-          const next_cols = current_cols.filter((c) => c !== strat);
-          const newPath = `${path} -> C${strat} Very Weakly Dom by C${dominator}`;
-          stepsRecord.push({
-            path: newPath,
-            matrixSnapshot: matrix,
-            currentRowIndices: current_rows,
-            currentColIndices: next_cols,
-            logs: [],
-          });
-          queue.push({ matrix, r: current_rows, c: next_cols, p: newPath });
-        }
-        return;
+    if (vw_rows.length > 0 || vw_cols.length > 0) {
+      for (const [strat, dominator] of vw_rows) {
+        const next_rows = current_rows.filter((r) => r !== strat);
+        const newPath = `${path} -> R${strat} Very Weakly Dom by R${dominator}`;
+        stepsRecord.push({
+          path: newPath,
+          matrixSnapshot: matrix,
+          currentRowIndices: next_rows,
+          currentColIndices: current_cols,
+          logs: [],
+        });
+        stack.push({ matrix, r: next_rows, c: current_cols, p: newPath });
       }
+      for (const [strat, dominator] of vw_cols) {
+        const next_cols = current_cols.filter((c) => c !== strat);
+        const newPath = `${path} -> C${strat} Very Weakly Dom by C${dominator}`;
+        stepsRecord.push({
+          path: newPath,
+          matrixSnapshot: matrix,
+          currentRowIndices: current_rows,
+          currentColIndices: next_cols,
+          logs: [],
+        });
+        stack.push({ matrix, r: current_rows, c: next_cols, p: newPath });
+      }
+      return;
     }
 
-    // Termination
+    // Termination (Equilibrium or Dead End)
     const targetStep = stepsRecord.find((s) => s.path === path);
     if (targetStep) {
       if (current_rows.length === 1 && current_cols.length === 1) {
@@ -562,57 +553,8 @@ export default function Home() {
       <main class="w-full max-w-5xl space-y-6">
         <section class="space-y-4">
           <h1 class="text-2xl font-bold text-zinc-800 dark:text-zinc-100">
-            IEDS Program - Breadth-First Search (BFS)
+            IEDS Program - Depth-First Search (DFS)
           </h1>
-
-          <div class="flex flex-col gap-4 p-4 rounded-lg bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-black dark:text-white">
-            <h3 class="text-xs font-bold uppercase tracking-wider">
-              Elimination Strategies
-            </h3>
-            <div class="flex flex-wrap gap-6">
-              <label class="flex items-center gap-2 text-sm cursor-not-allowed opacity-70">
-                <input
-                  type="checkbox"
-                  checked
-                  disabled
-                  class="accent-blue-600"
-                />
-                <span>
-                  Strict Domination{" "}
-                  <span class="text-[10px] bg-zinc-200 dark:bg-zinc-800 px-1 rounded">
-                    Required
-                  </span>
-                </span>
-              </label>
-              <label class="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={useWeak()}
-                  onInput={(e) => {
-                    const val = e.currentTarget.checked;
-                    setUseWeak(val);
-                    if (!val) setUseVeryWeak(false);
-                  }}
-                  class="accent-blue-600"
-                />
-                <span>Weak Domination</span>
-              </label>
-              <label class="flex items-center gap-2 text-sm cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={useVeryWeak()}
-                  onInput={(e) => {
-                    const val = e.currentTarget.checked;
-                    setUseVeryWeak(val);
-                    if (val) setUseWeak(true);
-                  }}
-                  class="accent-blue-600"
-                />
-                <span>Very Weak Domination</span>
-              </label>
-            </div>
-          </div>
-
           <div class="flex flex-wrap items-center gap-4">
             <Show when={!fileName()}>
               <input
@@ -656,6 +598,7 @@ export default function Home() {
                 <span class="text-xs text-zinc-500 italic">
                   File: {fileName()}
                 </span>
+
                 <div class="flex flex-wrap items-center gap-4">
                   <div class="flex items-center gap-1.5 px-3 py-1 bg-zinc-100 dark:bg-zinc-800 rounded-full border border-zinc-200 dark:border-zinc-700">
                     <span class="text-[10px] font-bold text-zinc-400 uppercase tracking-tight">
@@ -665,6 +608,7 @@ export default function Home() {
                       {elapsedTime()}
                     </span>
                   </div>
+
                   <Show when={firstEquilibriumElapsed()}>
                     <div class="flex items-center gap-1.5 px-3 py-1 bg-green-50 dark:bg-green-900/20 rounded-full border border-green-200 dark:border-green-800/50">
                       <span class="text-[10px] font-bold text-green-600 dark:text-green-400 uppercase tracking-tight">
@@ -675,6 +619,7 @@ export default function Home() {
                       </span>
                     </div>
                   </Show>
+
                   <Show when={firstDeadEndElapsed()}>
                     <div class="flex items-center gap-1.5 px-3 py-1 bg-amber-50 dark:bg-amber-900/20 rounded-full border border-amber-200 dark:border-amber-800/50">
                       <span class="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-tight">
